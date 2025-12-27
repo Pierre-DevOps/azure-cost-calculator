@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-calculator
+  labels:
+    app: azure-calculator
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: azure-calculator
+  template:
+    metadata:
+      labels:
+        app: azure-calculator
+    spec:
+      containers:
+      - name: calculator
+        image: ghcr.io/pierre-devops/azure-cost-calculator:latest
+        ports:
+        - containerPort: 5000
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
