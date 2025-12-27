@@ -1,8 +1,8 @@
-# 💰 Azure Cost Calculator
+#  Azure Cost Calculator
 
 Calculateur de coûts Azure pour estimer rapidement vos dépenses d'infrastructure cloud.
 
-## 🎯 Fonctionnalités
+##  Fonctionnalités
 
 - **Machines Virtuelles** : Calcul coûts VM (B-series, D-series)
 - **Azure Kubernetes Service** : Estimation cluster AKS + nodes
@@ -10,7 +10,7 @@ Calculateur de coûts Azure pour estimer rapidement vos dépenses d'infrastructu
 - **SQL Database** : Coûts bases de données (Basic, Standard, Premium)
 - **Estimation totale** : Vue d'ensemble mensuelle et annuelle
 
-## 🏗️ Architecture
+##  Architecture
 
 - **Backend** : Flask (Python 3.11)
 - **Frontend** : HTML/CSS/JavaScript natif
@@ -19,7 +19,7 @@ Calculateur de coûts Azure pour estimer rapidement vos dépenses d'infrastructu
 - **CI/CD** : GitHub Actions → GHCR → ArgoCD
 - **Déploiement** : GitOps avec Kustomize
 
-## 🚀 Déploiement
+##  Déploiement
 
 ### Local
 ```bash
@@ -40,15 +40,15 @@ kubectl apply -f manifests/overlays/prod/
 
 Service exposé sur NodePort 30500.
 
-## 📊 Tarifs
+##  Tarifs
 
 Tarifs basés sur la région **West Europe** (à jour décembre 2024).
 
-## 🔗 Accès
+##  Accès
 
 Production : https://pierre-devops.com/outils/calculateur
 
-## 👨‍💻 Auteur
+##  Auteur
 
 **Pierre-DevOps** - Consultant DevOps Azure & Kubernetes
 
