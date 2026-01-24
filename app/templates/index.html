@@ -5,14 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calculateur de Coûts Azure - Pierre-DevOps</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>💰 Calculateur de Coûts Azure</h1>
-            <p class="subtitle">Estimez vos coûts d'infrastructure cloud en quelques clics</p>
+            <h1>💰 Calculateur de Coûts Azure Intelligent</h1>
+            <p class="subtitle">Découvrez vos coûts cachés et les économies possibles</p>
         </header>
 
+        <!-- Section Calculateurs -->
         <div class="calculator-grid">
             <!-- VM Calculator -->
             <div class="card">
@@ -110,15 +112,56 @@
             </div>
         </div>
 
-        <!-- Total Summary -->
-        <div class="total-card">
-            <h2>📊 Estimation Totale</h2>
-            <div id="total-summary">
-                <p class="info">Calculez au moins un composant pour voir le total</p>
+        <!-- Section Total et Graphiques -->
+        <div class="results-section" id="results-section" style="display: none;">
+            
+            <!-- Total Summary -->
+            <div class="total-card">
+                <h2>📊 Estimation Totale</h2>
+                <div id="total-summary"></div>
+                
+                <div class="projection-summary">
+                    <h3>📈 Projection sur 3 ans</h3>
+                    <div id="projection-display"></div>
+                </div>
             </div>
-            <button id="btn-contact" class="btn-contact" style="display:none;">
-                📧 Demander un audit personnalisé
-            </button>
+
+            <!-- Graphiques -->
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3>Répartition des coûts</h3>
+                    <canvas id="costsPieChart"></canvas>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Projection mensuelle vs annuelle</h3>
+                    <canvas id="projectionChart"></canvas>
+                </div>
+                
+                <div class="chart-card">
+                    <h3>Évolution sur 3 ans</h3>
+                    <canvas id="evolutionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Optimizations -->
+            <div class="optimizations-card">
+                <h2>💡 Optimisations Recommandées</h2>
+                <div id="optimizations-list"></div>
+            </div>
+
+            <!-- Hidden Costs -->
+            <div class="hidden-costs-card">
+                <h2>🚨 Coûts Cachés Azure</h2>
+                <div id="hidden-costs-list"></div>
+            </div>
+
+            <!-- Comparison -->
+            <div class="comparison-card">
+                <h2>⚖️ Avant / Après Optimisation</h2>
+                <div id="comparison-display"></div>
+            </div>
+
         </div>
 
         <footer>
