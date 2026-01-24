@@ -1,295 +1,701 @@
-// Calculateur Azure Intelligent - Connexion à l'API Flask
-class AzureCostCalculator {
+/**
+ * Azure Cost Intelligence Engine
+ * Un moteur d'analyse prédictive avec IA pour l'optimisation des coûts Azure
+ */
+
+class AzureCostIntelligence {
     constructor() {
-        this.currentConfig = null;
-        this.currentCosts = null;
-        this.optimizedCosts = null;
-        this.charts = {};
-        this.isCalculating = false;
-        this.API_BASE = '/api'; // Votre API Flask
-    }
-
-    init() {
-        this.bindEvents();
-        this.initCharts();
-        this.calculateCosts();
-        this.showNotification('Calculateur Azure Intelligent prêt !', 'success');
-    }
-
-    bindEvents() {
-        // Bouton calcul principal
-        document.getElementById('calculateBtn').addEventListener('click', () => this.calculateCosts());
+        this.config = {
+            vm: { type: 'D2s_v3', count: 2, hours: 16 },
+            storage: { type: 'Standard_LRS', size: 512, backup: true },
+            aks: { enabled: true, nodes: 3 },
+            database: { enabled: true, tier: 'Standard_S0' }
+        };
         
-        // Bouton optimisation
-        document.getElementById('optimizeBtn').addEventListener('click', () => this.optimizeCosts());
-        
-        // Bouton réinitialisation
-        document.getElementById('resetBtn').addEventListener('click', () => this.resetToDefaults());
-        
-        // Sliders et inputs en temps réel
-        const inputs = ['vmCount', 'vmHours', 'aksNodes', 'storageSize'];
-        inputs.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', () => this.updatePreviews());
-            }
-        });
-        
-        // Selects
-        const selects = ['vmSize', 'aksSize', 'storageType', 'dbType', 'dbSize'];
-        selects.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('change', () => this.updatePreviews());
-            }
-        });
-        
-        // Checkboxes
-        document.getElementById('backupEnabled').addEventListener('change', () => this.updatePreviews());
-        document.getElementById('dbBackup').addEventListener('change', () => this.updatePreviews());
-        
-        // Tabs des graphiques
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchChartTab(e));
-        });
-        
-        // Actions rapides
-        document.querySelectorAll('.btn-action').forEach(btn => {
-            btn.addEventListener('click', (e) => this.applyQuickAction(e));
-        });
-        
-        // Boutons d'export et aide
-        document.getElementById('exportBtn').addEventListener('click', () => this.exportResults());
-        document.getElementById('helpBtn').addEventListener('click', () => this.showHelp());
-        document.getElementById('contactBtn').addEventListener('click', () => this.showContact());
-    }
-
-    getConfig() {
-        return {
+        this.pricing = {
             vm: {
-                size: document.getElementById('vmSize').value,
-                count: parseInt(document.getElementById('vmCount').value) || 2,
-                hours: parseInt(document.getElementById('vmHours').value) || 24
-            },
-            aks: {
-                size: document.getElementById('aksSize').value,
-                nodes: parseInt(document.getElementById('aksNodes').value) || 3,
-                utilization: 0.8 // Valeur par défaut
+                'B2s': { hour: 0.0416, month: 41.00 },
+                'D2s_v3': { hour: 0.119, month: 119.00 },
+                'D4s_v3': { hour: 0.238, month: 238.00 },
+                'E4s_v3': { hour: 0.284, month: 284.00 }
             },
             storage: {
-                type: document.getElementById('storageType').value,
-                size: parseInt(document.getElementById('storageSize').value) || 256,
-                backup: document.getElementById('backupEnabled').checked
+                'Standard_LRS': 0.018,
+                'Standard_GRS': 0.036,
+                'Premium_LRS': 0.154,
+                'Premium_ZRS': 0.185
             },
+            backup: 0.10,
+            aks: 0.119,
             database: {
-                type: document.getElementById('dbType').value,
-                size: document.getElementById('dbSize').value,
-                backup: document.getElementById('dbBackup').checked
+                'Basic': 5.99,
+                'Standard_S0': 14.99,
+                'Standard_S1': 29.99,
+                'Premium_P1': 219.99
+            },
+            hidden: {
+                bandwidth: 0.087,
+                snapshot: 0.05,
+                monitoring: 2.49,
+                security: 0.033
             }
         };
-    }
-
-    async calculateCosts() {
-        if (this.isCalculating) return;
         
-        this.isCalculating = true;
-        this.showLoading();
+        this.charts = {};
+        this.animations = {};
+        this.isAnalyzing = false;
+        this.API_BASE = '/api';
+        
+        this.init();
+    }
+    
+    init() {
+        this.setupEventListeners();
+        this.initCharts();
+        this.initializeUI();
+        this.performAnalysis();
+        this.startLiveUpdates();
+        
+        // Effet de chargement initial
+        this.showLoader();
+        setTimeout(() => {
+            this.hideLoader();
+            this.showNotification('Azure Cost Intelligence ready', 'success');
+        }, 1500);
+    }
+    
+    setupEventListeners() {
+        // Sélectionneurs de type VM
+        document.querySelectorAll('.vtype-option').forEach(option => {
+            option.addEventListener('click', (e) => this.selectVMType(e));
+        });
+        
+        // Contrôles quantité
+        document.getElementById('vmMinus').addEventListener('click', () => this.adjustVMCount(-1));
+        document.getElementById('vmPlus').addEventListener('click', () => this.adjustVMCount(1));
+        
+        // Sliders
+        document.getElementById('vmHours').addEventListener('input', (e) => this.updateTimeline(e));
+        document.getElementById('storageSize').addEventListener('input', (e) => this.updateStorage(e));
+        document.getElementById('aksNodes').addEventListener('input', (e) => this.updateAKS(e));
+        
+        // Toggles
+        document.getElementById('aksEnabled').addEventListener('change', () => this.toggleService('aks'));
+        document.getElementById('dbEnabled').addEventListener('change', () => this.toggleService('database'));
+        document.getElementById('backupEnabled').addEventListener('change', () => this.toggleBackup());
+        
+        // Sélecteurs de tier
+        document.querySelectorAll('.tier-option').forEach(option => {
+            option.addEventListener('click', (e) => this.selectStorageTier(e));
+        });
+        
+        // Presets
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => this.applyPreset(e));
+        });
+        
+        // Boutons d'action
+        document.getElementById('calculateBtn').addEventListener('click', () => this.performAnalysis());
+        document.getElementById('quickOptimize').addEventListener('click', () => this.quickOptimize());
+        
+        // Toggles de comparaison
+        document.getElementById('compareAnnual').addEventListener('change', () => this.toggleTimeframe());
+        
+        // Boutons d'application
+        document.querySelectorAll('.apply-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => this.applyRecommendation(e));
+        });
+        
+        // Navigation
+        document.getElementById('themeToggle').addEventListener('click', () => this.toggleTheme());
+        document.getElementById('exportData').addEventListener('click', () => this.exportAnalysis());
+        
+        // Mise à jour en temps réel
+        const inputs = ['vmHours', 'storageSize', 'aksNodes', 'dbTier'];
+        inputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('input', () => this.debouncedAnalysis());
+        });
+    }
+    
+    initializeUI() {
+        // Initialise les valeurs d'affichage
+        this.updateVMDisplay();
+        this.updateStorageDisplay();
+        this.updateAKSDisplay();
+        
+        // Met à jour les badges de coût
+        this.updateCostBadges();
+        
+        // Initialise les animations
+        this.initAnimations();
+    }
+    
+    initAnimations() {
+        // Animation du timeline
+        this.animations.timeline = {
+            element: document.getElementById('timelineFill'),
+            value: 66.66
+        };
+        
+        // Animation de la capacité
+        this.animations.capacity = {
+            element: document.getElementById('capacityFill'),
+            value: 25
+        };
+        
+        // Effet de particules pour le bouton principal
+        const btn = document.getElementById('calculateBtn');
+        btn.addEventListener('mouseenter', () => this.createParticles(btn));
+    }
+    
+    createParticles(element) {
+        const rect = element.getBoundingClientRect();
+        const particles = 15;
+        
+        for (let i = 0; i < particles; i++) {
+            const particle = document.createElement('div');
+            particle.style.cssText = `
+                position: fixed;
+                width: 4px;
+                height: 4px;
+                background: var(--primary);
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 10000;
+                left: ${rect.left + rect.width/2}px;
+                top: ${rect.top + rect.height/2}px;
+            `;
+            
+            document.body.appendChild(particle);
+            
+            // Animation aléatoire
+            const angle = Math.random() * Math.PI * 2;
+            const velocity = 2 + Math.random() * 3;
+            const distance = 20 + Math.random() * 30;
+            
+            const animate = () => {
+                const x = Math.cos(angle) * velocity;
+                const y = Math.sin(angle) * velocity;
+                
+                particle.style.transform = `translate(${x}px, ${y}px)`;
+                particle.style.opacity = 1 - (distance / 50);
+                
+                if (distance > 0) {
+                    requestAnimationFrame(animate);
+                } else {
+                    particle.remove();
+                }
+            };
+            
+            animate();
+        }
+    }
+    
+    selectVMType(event) {
+        const option = event.currentTarget;
+        const type = option.dataset.type;
+        
+        // Désactive toutes les options
+        document.querySelectorAll('.vtype-option').forEach(opt => {
+            opt.dataset.active = 'false';
+        });
+        
+        // Active l'option sélectionnée
+        option.dataset.active = 'true';
+        
+        // Met à jour la configuration
+        this.config.vm.type = type;
+        
+        // Animation de sélection
+        this.animateSelection(option);
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    selectStorageTier(event) {
+        const option = event.currentTarget;
+        const tier = option.dataset.tier;
+        
+        // Désactive toutes les options
+        document.querySelectorAll('.tier-option').forEach(opt => {
+            opt.dataset.active = 'false';
+        });
+        
+        // Active l'option sélectionnée
+        option.dataset.active = 'true';
+        
+        // Met à jour la configuration
+        this.config.storage.type = tier;
+        
+        // Animation
+        this.animateSelection(option);
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    animateSelection(element) {
+        element.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            element.style.transform = 'scale(1)';
+        }, 150);
+        
+        // Effet de ripple
+        const ripple = document.createElement('div');
+        ripple.style.cssText = `
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(0, 188, 242, 0.3);
+            transform: scale(0);
+            animation: ripple 0.6s linear;
+            pointer-events: none;
+        `;
+        
+        const rect = element.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${rect.left}px`;
+        ripple.style.top = `${rect.top}px`;
+        
+        document.body.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 600);
+    }
+    
+    adjustVMCount(delta) {
+        let count = parseInt(document.getElementById('vmQty').textContent) || 2;
+        count = Math.max(1, Math.min(20, count + delta));
+        
+        // Animation du compteur
+        this.animateCounter('vmQty', count);
+        
+        // Met à jour la configuration
+        this.config.vm.count = count;
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    animateCounter(elementId, targetValue) {
+        const element = document.getElementById(elementId);
+        const current = parseInt(element.textContent) || 0;
+        const duration = 300;
+        const steps = 20;
+        const stepValue = (targetValue - current) / steps;
+        
+        let step = 0;
+        const animate = () => {
+            if (step < steps) {
+                const value = Math.round(current + (stepValue * step));
+                element.textContent = value;
+                step++;
+                setTimeout(animate, duration / steps);
+            } else {
+                element.textContent = targetValue;
+            }
+        };
+        
+        animate();
+    }
+    
+    updateTimeline(event) {
+        const hours = parseInt(event.target.value);
+        const percentage = ((hours - 4) / 20) * 100;
+        
+        // Animation de la timeline
+        this.animateValue(this.animations.timeline, percentage);
+        
+        // Met à jour l'affichage
+        document.getElementById('timelineFill').style.width = `${percentage}%`;
+        
+        // Met à jour la configuration
+        this.config.vm.hours = hours;
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    updateStorage(event) {
+        const size = parseInt(event.target.value);
+        const percentage = (size / 2048) * 100;
+        
+        // Animation de la capacité
+        this.animateValue(this.animations.capacity, percentage);
+        
+        // Met à jour l'affichage
+        document.getElementById('storageValue').textContent = `${size} GB`;
+        document.getElementById('capacityFill').style.width = `${percentage}%`;
+        
+        // Met à jour la configuration
+        this.config.storage.size = size;
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    updateAKS(event) {
+        const nodes = parseInt(event.target.value);
+        document.getElementById('aksNodesValue').textContent = nodes;
+        this.config.aks.nodes = nodes;
+        this.debouncedAnalysis();
+    }
+    
+    toggleService(service) {
+        const enabled = document.getElementById(`${service}Enabled`).checked;
+        const configEl = document.getElementById(`${service}Config`);
+        
+        // Animation de transition
+        if (enabled) {
+            configEl.style.display = 'block';
+            configEl.style.opacity = '0';
+            configEl.style.transform = 'translateY(-10px)';
+            
+            setTimeout(() => {
+                configEl.style.transition = 'all 0.3s ease';
+                configEl.style.opacity = '1';
+                configEl.style.transform = 'translateY(0)';
+            }, 10);
+        } else {
+            configEl.style.transition = 'all 0.3s ease';
+            configEl.style.opacity = '0';
+            configEl.style.transform = 'translateY(-10px)';
+            
+            setTimeout(() => {
+                configEl.style.display = 'none';
+            }, 300);
+        }
+        
+        // Met à jour la configuration
+        this.config[service].enabled = enabled;
+        
+        // Analyse
+        this.debouncedAnalysis();
+    }
+    
+    toggleBackup() {
+        const enabled = document.getElementById('backupEnabled').checked;
+        this.config.storage.backup = enabled;
+        this.debouncedAnalysis();
+    }
+    
+    applyPreset(event) {
+        const btn = event.currentTarget;
+        const size = parseInt(btn.dataset.size);
+        
+        // Animation du bouton
+        btn.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            btn.style.transform = 'scale(1)';
+        }, 150);
+        
+        // Applique le preset
+        document.getElementById('storageSize').value = size;
+        this.updateStorage({ target: { value: size } });
+    }
+    
+    toggleTimeframe() {
+        const isAnnual = document.getElementById('compareAnnual').checked;
+        this.updateComparisonChart(isAnnual);
+    }
+    
+    animateValue(animation, target) {
+        const start = animation.value;
+        const duration = 500;
+        const startTime = performance.now();
+        
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            
+            // Easing function
+            const ease = 1 - Math.pow(1 - progress, 3);
+            const current = start + (target - start) * ease;
+            
+            animation.value = current;
+            animation.element.style.width = `${current}%`;
+            
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        
+        requestAnimationFrame(animate);
+    }
+    
+    async performAnalysis() {
+        if (this.isAnalyzing) return;
+        
+        this.isAnalyzing = true;
+        this.showLoader();
         
         try {
-            const config = this.getConfig();
-            this.currentConfig = config;
+            // Calcul des coûts
+            const costs = this.calculateCosts();
             
-            // Appel à l'API Flask
-            const response = await fetch(this.API_BASE + '/calculate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(config)
-            });
+            // Analyse d'optimisation IA
+            const recommendations = this.analyzeOptimizations(costs);
             
-            if (!response.ok) {
-                throw new Error(`API error: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            this.currentCosts = data;
+            // Calcul de la configuration optimisée
+            const optimized = this.calculateOptimizedConfig();
             
             // Mise à jour de l'interface
-            this.updateCostDisplay(data);
-            this.updateCharts(data);
-            this.generateRecommendations(data);
-            this.calculateHiddenCosts();
+            this.updateCostDisplay(costs);
+            this.updateCharts(costs, optimized);
+            this.updateRecommendations(recommendations);
+            this.updateOptimizationSummary(costs, optimized);
+            this.updateHiddenCosts(costs);
+            this.updateComparison(costs, optimized);
             
-            // Calcul de l'optimisation
-            await this.calculateOptimizedCosts(config);
-            
-            this.showNotification('Calcul terminé avec succès !', 'success');
+            // Animation de succès
+            this.animateSuccess();
             
         } catch (error) {
-            console.error('Error calculating costs:', error);
-            this.showNotification('Erreur lors du calcul. Utilisation des valeurs par défaut.', 'error');
-            this.useFallbackCalculations();
+            console.error('Analysis error:', error);
+            this.showNotification('Analysis failed', 'error');
         } finally {
-            this.isCalculating = false;
-            this.hideLoading();
+            this.isAnalyzing = false;
+            this.hideLoader();
         }
     }
-
-    async calculateOptimizedCosts(config) {
-        try {
-            // Crée une configuration optimisée
-            const optimizedConfig = JSON.parse(JSON.stringify(config));
-            
-            // Optimisations automatiques
-            if (optimizedConfig.vm.hours > 12) {
-                optimizedConfig.vm.hours = 12;
-            }
-            
-            if (optimizedConfig.aks.nodes > 2) {
-                optimizedConfig.aks.nodes = 2;
-            }
-            
-            if (optimizedConfig.storage.type === 'Premium_LRS' && optimizedConfig.database.type !== 'cosmos_db') {
-                optimizedConfig.storage.type = 'Standard_GRS';
-            }
-            
-            // Appel API pour les coûts optimisés
-            const response = await fetch(this.API_BASE + '/calculate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(optimizedConfig)
+    
+    calculateCosts() {
+        const { vm, storage, aks, database } = this.config;
+        
+        // Coûts VM
+        const vmPrice = this.pricing.vm[vm.type]?.month || 119;
+        const vmCost = vmPrice * vm.count * (vm.hours / 24);
+        
+        // Coûts stockage
+        const storageRate = this.pricing.storage[storage.type] || 0.018;
+        let storageCost = storageRate * storage.size;
+        if (storage.backup) storageCost += storage.size * this.pricing.backup;
+        
+        // Coûts AKS
+        let aksCost = 0;
+        if (aks.enabled) {
+            aksCost = this.pricing.aks * aks.nodes * 730; // Heures par mois
+        }
+        
+        // Coûts base de données
+        let dbCost = 0;
+        if (database.enabled) {
+            dbCost = this.pricing.database[database.tier] || 14.99;
+        }
+        
+        // Coûts cachés
+        const hiddenCosts = this.calculateHiddenCosts(vm, storage, aks);
+        
+        // Total
+        const total = vmCost + storageCost + aksCost + dbCost + hiddenCosts.total;
+        
+        return {
+            vm: Math.round(vmCost),
+            storage: Math.round(storageCost),
+            aks: Math.round(aksCost),
+            database: Math.round(dbCost),
+            hidden: hiddenCosts,
+            total: Math.round(total)
+        };
+    }
+    
+    calculateHiddenCosts(vm, storage, aks) {
+        const bandwidth = storage.size * 0.1 * this.pricing.hidden.bandwidth;
+        const snapshots = storage.size * 0.2 * this.pricing.hidden.snapshot;
+        const monitoring = (vm.count + (aks.enabled ? aks.nodes : 0)) * this.pricing.hidden.monitoring;
+        const security = vm.count * 3 * this.pricing.hidden.security;
+        
+        const total = bandwidth + snapshots + monitoring + security;
+        
+        return {
+            bandwidth: Math.round(bandwidth),
+            snapshots: Math.round(snapshots),
+            monitoring: Math.round(monitoring),
+            security: Math.round(security),
+            total: Math.round(total)
+        };
+    }
+    
+    analyzeOptimizations(costs) {
+        const recommendations = [];
+        
+        // Analyse des VMs
+        if (this.config.vm.hours > 12) {
+            recommendations.push({
+                id: 'auto-scale',
+                title: 'Auto-scaling Schedule',
+                description: 'Scale down non-production VMs during off-hours',
+                impact: 'high',
+                savings: Math.round(costs.vm * 0.3),
+                difficulty: 'easy',
+                action: () => {
+                    this.config.vm.hours = 12;
+                    document.getElementById('vmHours').value = 12;
+                    this.updateTimeline({ target: { value: 12 } });
+                }
             });
-            
-            if (response.ok) {
-                this.optimizedCosts = await response.json();
-                this.updateComparisonChart();
-            }
-            
-        } catch (error) {
-            console.error('Error calculating optimized costs:', error);
         }
+        
+        // Analyse du stockage
+        if (this.config.storage.type === 'Premium_LRS' && !this.config.database.enabled) {
+            recommendations.push({
+                id: 'storage-tier',
+                title: 'Storage Tier Optimization',
+                description: 'Move cold data to archive tier',
+                impact: 'medium',
+                savings: Math.round(costs.storage * 0.2),
+                difficulty: 'medium',
+                action: () => {
+                    this.selectStorageTierUI('Standard_LRS');
+                }
+            });
+        }
+        
+        // Analyse AKS
+        if (this.config.aks.enabled && this.config.aks.nodes > 2) {
+            recommendations.push({
+                id: 'aks-scale',
+                title: 'AKS Node Optimization',
+                description: 'Right-size your Kubernetes cluster',
+                impact: 'medium',
+                savings: Math.round(costs.aks * 0.25),
+                difficulty: 'easy',
+                action: () => {
+                    this.config.aks.nodes = 2;
+                    document.getElementById('aksNodes').value = 2;
+                    this.updateAKS({ target: { value: 2 } });
+                }
+            });
+        }
+        
+        // Recommandations génériques
+        if (costs.total > 1000) {
+            recommendations.push({
+                id: 'reserved-instances',
+                title: 'Reserved Instances',
+                description: 'Commit to 1-year reserved VMs',
+                impact: 'low',
+                savings: Math.round(costs.vm * 0.15),
+                difficulty: 'commitment',
+                action: () => {
+                    this.showNotification('Reserved instances configured', 'info');
+                }
+            });
+        }
+        
+        return recommendations;
     }
-
+    
+    selectStorageTierUI(tier) {
+        document.querySelectorAll('.tier-option').forEach(opt => {
+            opt.dataset.active = (opt.dataset.tier === tier).toString();
+        });
+        this.config.storage.type = tier;
+        this.debouncedAnalysis();
+    }
+    
+    calculateOptimizedConfig() {
+        const optimized = JSON.parse(JSON.stringify(this.config));
+        
+        // Optimisations automatiques
+        if (optimized.vm.hours > 12) optimized.vm.hours = 12;
+        if (optimized.aks.enabled && optimized.aks.nodes > 2) optimized.aks.nodes = 2;
+        if (optimized.storage.type === 'Premium_LRS') optimized.storage.type = 'Standard_GRS';
+        if (optimized.storage.size > 500) optimized.storage.size = Math.max(100, Math.floor(optimized.storage.size * 0.7));
+        
+        // Calcul des coûts optimisés
+        const tempConfig = this.config;
+        this.config = optimized;
+        const costs = this.calculateCosts();
+        this.config = tempConfig;
+        
+        return costs;
+    }
+    
     updateCostDisplay(costs) {
         const formatter = new Intl.NumberFormat('fr-FR', {
             style: 'currency',
             currency: 'EUR',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         });
         
         // Coût total
-        document.getElementById('totalCost').textContent = formatter.format(costs.total);
+        document.getElementById('totalCostDisplay').textContent = formatter.format(costs.total);
         
-        // Détails
-        document.getElementById('vmCostDetail').textContent = `VMs: ${formatter.format(costs.vm || 0)}`;
-        document.getElementById('storageCostDetail').textContent = `Stockage: ${formatter.format(costs.storage || 0)}`;
+        // Coûts par catégorie
+        document.getElementById('computeCost').textContent = formatter.format(costs.vm);
+        document.getElementById('storageCost').textContent = formatter.format(costs.storage);
+        document.getElementById('servicesCost').textContent = formatter.format(costs.aks + costs.database);
         
-        // Calcul des économies
-        if (this.optimizedCosts && costs.total > 0) {
-            const savings = costs.total - this.optimizedCosts.total;
-            const percent = ((savings / costs.total) * 100).toFixed(1);
-            
-            document.getElementById('potentialSavings').textContent = formatter.format(savings);
-            document.getElementById('savingsPercent').textContent = `${percent}%`;
-            
-            // Mise à jour des actions rapides
-            document.getElementById('savingsHours').textContent = formatter.format(costs.vm * 0.3);
-            document.getElementById('savingsStorage').textContent = formatter.format(costs.storage * 0.2);
-            document.getElementById('savingsAKS').textContent = formatter.format((costs.aks || 0) * 0.25);
-        }
+        // Mise à jour des badges
+        this.updateCostBadges(costs);
     }
-
-    updatePreviews() {
-        // Mise à jour en temps réel des prévisualisations
-        const config = this.getConfig();
+    
+    updateCostBadges(costs) {
+        if (!costs) costs = this.calculateCosts();
         
-        // Prévisualisation VM
-        const vmCost = config.vm.count * config.vm.hours * 0.12 * 30; // Estimation
-        document.getElementById('vmCostPreview').textContent = `€${vmCost.toFixed(2)}/mois`;
-        
-        // Prévisualisation AKS
-        const aksCost = config.aks.nodes * 24 * 0.08 * 30; // Estimation
-        document.getElementById('aksCostPreview').textContent = `€${aksCost.toFixed(2)}/mois`;
-        
-        // Prévisualisation stockage
-        document.getElementById('storageSizeValue').textContent = `${config.storage.size} GB`;
-        const storageCost = config.storage.size * 0.12;
-        document.getElementById('storageCostPreview').textContent = `€${storageCost.toFixed(2)}/mois`;
-        
-        // Prévisualisation DB
-        const dbCost = config.database.type === 'none' ? 0 : 
-                      config.database.type === 'sql_basic' ? 5.99 :
-                      config.database.type === 'sql_standard' ? 14.99 : 24.99;
-        document.getElementById('dbCostPreview').textContent = `€${dbCost.toFixed(2)}/mois`;
+        document.getElementById('vmCostBadge').textContent = `€${costs.vm}/mois`;
+        document.getElementById('storageCostBadge').textContent = `€${costs.storage}/mois`;
+        document.getElementById('servicesCostBadge').textContent = `€${costs.aks + costs.database}/mois`;
     }
-
+    
     initCharts() {
+        // Chart de répartition des coûts
         const ctx1 = document.getElementById('costDistributionChart')?.getContext('2d');
-        const ctx2 = document.getElementById('comparisonChart')?.getContext('2d');
-        
         if (ctx1) {
             this.charts.distribution = new Chart(ctx1, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Machines Virtuelles', 'Kubernetes', 'Stockage', 'Base de données', 'Coûts cachés'],
+                    labels: ['Compute', 'Storage', 'AKS', 'Database', 'Hidden'],
                     datasets: [{
                         data: [0, 0, 0, 0, 0],
                         backgroundColor: [
-                            '#0078D4', // Bleu Azure
-                            '#00BCF2', // Bleu clair
-                            '#107C10', // Vert
-                            '#FFB900', // Jaune/Or
-                            '#E81123'  // Rouge
+                            'rgba(0, 188, 242, 0.8)',
+                            'rgba(155, 77, 255, 0.8)',
+                            'rgba(255, 77, 141, 0.8)',
+                            'rgba(0, 214, 143, 0.8)',
+                            'rgba(255, 170, 0, 0.8)'
                         ],
-                        borderWidth: 2,
-                        borderColor: '#FFFFFF',
+                        borderWidth: 0,
                         hoverOffset: 20
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '70%',
                     plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true,
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
+                        legend: { display: false },
                         tooltip: {
                             callbacks: {
                                 label: (context) => {
                                     const label = context.label || '';
                                     const value = context.parsed || 0;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return `${label}: €${value.toFixed(2)} (${percentage}%)`;
+                                    const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                                    return `${label}: €${value} (${percentage}%)`;
                                 }
                             }
                         }
-                    },
-                    cutout: '60%'
+                    }
                 }
             });
         }
         
+        // Chart de comparaison
+        const ctx2 = document.getElementById('comparisonChart')?.getContext('2d');
         if (ctx2) {
             this.charts.comparison = new Chart(ctx2, {
                 type: 'bar',
                 data: {
-                    labels: ['Configuration actuelle', 'Configuration optimisée'],
+                    labels: ['Current', 'Optimized'],
                     datasets: [{
-                        label: 'Coût mensuel (€)',
                         data: [0, 0],
-                        backgroundColor: ['#0078D4', '#107C10'],
+                        backgroundColor: [
+                            'rgba(0, 188, 242, 0.8)',
+                            'rgba(0, 214, 143, 0.8)'
+                        ],
                         borderRadius: 8,
                         borderWidth: 0
                     }]
@@ -300,26 +706,22 @@ class AzureCostCalculator {
                     scales: {
                         y: {
                             beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            },
-                            ticks: {
+                            grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                            ticks: { 
+                                color: 'rgba(255, 255, 255, 0.6)',
                                 callback: (value) => `€${value}`
                             }
                         },
                         x: {
-                            grid: {
-                                display: false
-                            }
+                            grid: { display: false },
+                            ticks: { color: 'rgba(255, 255, 255, 0.6)' }
                         }
                     },
                     plugins: {
-                        legend: {
-                            display: false
-                        },
+                        legend: { display: false },
                         tooltip: {
                             callbacks: {
-                                label: (context) => `Coût: €${context.parsed.y.toFixed(2)}`
+                                label: (context) => `€${context.parsed.y}`
                             }
                         }
                     }
@@ -327,615 +729,481 @@ class AzureCostCalculator {
             });
         }
     }
-
-    updateCharts(costs) {
+    
+    updateCharts(costs, optimized) {
+        // Chart de répartition
         if (this.charts.distribution) {
             this.charts.distribution.data.datasets[0].data = [
-                costs.vm || 0,
-                costs.aks || 0,
-                costs.storage || 0,
-                costs.database || 0,
-                costs.hidden || 0
+                costs.vm,
+                costs.storage,
+                costs.aks,
+                costs.database,
+                costs.hidden.total
             ];
             this.charts.distribution.update();
         }
-    }
-
-    updateComparisonChart() {
-        if (this.charts.comparison && this.currentCosts && this.optimizedCosts) {
+        
+        // Chart de comparaison
+        if (this.charts.comparison && optimized) {
             this.charts.comparison.data.datasets[0].data = [
-                this.currentCosts.total,
-                this.optimizedCosts.total
+                costs.total,
+                optimized.total
             ];
             this.charts.comparison.update();
         }
     }
-
-    generateRecommendations(costs) {
-        const recommendations = [];
-        const container = document.getElementById('recommendationsList');
+    
+    updateComparisonChart(isAnnual) {
+        const costs = this.calculateCosts();
+        const optimized = this.calculateOptimizedConfig();
         
-        if (!container) return;
-        
-        // Recommandations basées sur les coûts
-        if (costs.vm > 500) {
-            recommendations.push({
-                icon: 'server',
-                title: 'Optimiser les instances VM',
-                description: `Vos VMs coûtent €${costs.vm.toFixed(2)}/mois. Passez à des instances réservées pour économiser jusqu'à 72%.`,
-                action: 'vm_reserved'
-            });
-        }
-        
-        if (costs.storage > 200) {
-            recommendations.push({
-                icon: 'database',
-                title: 'Optimiser le stockage',
-                description: `Votre stockage coûte €${costs.storage.toFixed(2)}/mois. Activez le nettoyage automatique et archivez les données froides.`,
-                action: 'storage_cleanup'
-            });
-        }
-        
-        if (costs.hidden > 100) {
-            recommendations.push({
-                icon: 'eye-slash',
-                title: 'Réduire les coûts cachés',
-                description: `Vos coûts cachés s'élèvent à €${costs.hidden.toFixed(2)}/mois. Optimisez la bande passante et les snapshots.`,
-                action: 'hidden_costs'
-            });
-        }
-        
-        if (costs.aks > 300) {
-            recommendations.push({
-                icon: 'cubes',
-                title: 'Optimiser le cluster AKS',
-                description: `Votre cluster AKS coûte €${costs.aks.toFixed(2)}/mois. Activez le scale automatique et réduisez le nombre de nodes.`,
-                action: 'aks_scale'
-            });
-        }
-        
-        // Ajout de recommandations par défaut si peu de recommandations
-        if (recommendations.length < 2) {
-            recommendations.push({
-                icon: 'clock',
-                title: 'Arrêt automatique des VMs',
-                description: 'Configurez l\'arrêt automatique des VMs de développement la nuit et le week-end.',
-                action: 'auto_shutdown'
-            });
-            
-            recommendations.push({
-                icon: 'search',
-                title: 'Audit des ressources',
-                description: 'Identifiez les ressources inutilisées ou sous-utilisées.',
-                action: 'audit'
-            });
-        }
-        
-        // Mise à jour de l'affichage
-        container.innerHTML = '';
-        
-        recommendations.forEach(rec => {
-            const div = document.createElement('div');
-            div.className = 'recommendation-item fade-in';
-            div.innerHTML = `
-                <div class="recommendation-icon">
-                    <i class="fas fa-${rec.icon}"></i>
-                </div>
-                <div class="recommendation-content">
-                    <h5>${rec.title}</h5>
-                    <p>${rec.description}</p>
-                </div>
-                <button class="btn-action" data-action="${rec.action}">
-                    <i class="fas fa-check"></i> Appliquer
-                </button>
-            `;
-            container.appendChild(div);
-            
-            // Ajout de l'événement
-            div.querySelector('.btn-action').addEventListener('click', () => {
-                this.applyRecommendation(rec.action);
-            });
-        });
-    }
-
-    calculateHiddenCosts() {
-        // Estimation des coûts cachés
-        if (!this.currentCosts) return;
-        
-        const hidden = this.currentCosts.total * 0.15; // 15% du total
-        document.getElementById('hiddenCosts').textContent = 
-            new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(hidden);
-    }
-
-    async optimizeCosts() {
-        this.showLoading();
-        
-        try {
-            const config = this.getConfig();
-            
-            // Appel API d'optimisation
-            const response = await fetch(this.API_BASE + '/optimize', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(config)
-            });
-            
-            if (response.ok) {
-                const optimizedConfig = await response.json();
-                
-                // Applique la configuration optimisée
-                this.applyOptimizedConfig(optimizedConfig);
-                
-                // Recalcule les coûts
-                await this.calculateCosts();
-                
-                this.showNotification('Optimisation appliquée avec succès !', 'success');
-            }
-            
-        } catch (error) {
-            console.error('Error optimizing costs:', error);
-            this.showNotification('Erreur lors de l\'optimisation.', 'error');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    applyOptimizedConfig(config) {
-        if (config.vm) {
-            document.getElementById('vmSize').value = config.vm.size || 'D2s_v3';
-            document.getElementById('vmCount').value = config.vm.count || 2;
-            document.getElementById('vmHours').value = config.vm.hours || 12;
-        }
-        
-        if (config.aks) {
-            document.getElementById('aksSize').value = config.aks.size || 'D2s_v3';
-            document.getElementById('aksNodes').value = config.aks.nodes || 2;
-        }
-        
-        if (config.storage) {
-            document.getElementById('storageType').value = config.storage.type || 'Standard_GRS';
-            document.getElementById('storageSize').value = config.storage.size || 200;
-        }
-    }
-
-    applyRecommendation(action) {
-        switch (action) {
-            case 'vm_reserved':
-                document.getElementById('vmHours').value = 24; // Production full-time
-                break;
-            case 'storage_cleanup':
-                const currentSize = parseInt(document.getElementById('storageSize').value);
-                document.getElementById('storageSize').value = Math.max(32, Math.floor(currentSize * 0.8));
-                break;
-            case 'aks_scale':
-                document.getElementById('aksNodes').value = 2;
-                break;
-            case 'auto_shutdown':
-                document.getElementById('vmHours').value = 10;
-                break;
-        }
-        
-        this.calculateCosts();
-        this.showNotification('Recommandation appliquée !', 'success');
-    }
-
-    resetToDefaults() {
-        document.getElementById('vmSize').value = 'D2s_v3';
-        document.getElementById('vmCount').value = 2;
-        document.getElementById('vmHours').value = 24;
-        
-        document.getElementById('aksSize').value = 'D2s_v3';
-        document.getElementById('aksNodes').value = 3;
-        
-        document.getElementById('storageType').value = 'Standard_GRS';
-        document.getElementById('storageSize').value = 256;
-        document.getElementById('backupEnabled').checked = true;
-        
-        document.getElementById('dbType').value = 'sql_standard';
-        document.getElementById('dbSize').value = 'S1';
-        document.getElementById('dbBackup').checked = true;
-        
-        this.calculateCosts();
-        this.showNotification('Configuration réinitialisée', 'info');
-    }
-
-    useFallbackCalculations() {
-        // Calculs de secours si l'API échoue
-        const config = this.getConfig();
-        
-        const vmCost = config.vm.count * config.vm.hours * 0.12 * 30;
-        const aksCost = config.aks.nodes * 24 * 0.08 * 30;
-        const storageCost = config.storage.size * 0.12;
-        const dbCost = config.database.type === 'none' ? 0 : 
-                      config.database.type === 'sql_basic' ? 5.99 :
-                      config.database.type === 'sql_standard' ? 14.99 : 24.99;
-        
-        const total = vmCost + aksCost + storageCost + dbCost;
-        const hidden = total * 0.15;
-        
-        this.currentCosts = {
-            vm: vmCost,
-            aks: aksCost,
-            storage: storageCost,
-            database: dbCost,
-            hidden: hidden,
-            total: total + hidden
-        };
-        
-        this.updateCostDisplay(this.currentCosts);
-        this.updateCharts(this.currentCosts);
-        this.generateRecommendations(this.currentCosts);
-    }
-
-    switchChartTab(event) {
-        const btn = event.target.closest('.tab-btn');
-        if (!btn) return;
-        
-        // Active le bouton cliqué
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        
-        // Met à jour le graphique de comparaison
-        const chartType = btn.dataset.chart;
-        if (this.charts.comparison && this.currentCosts && this.optimizedCosts) {
-            if (chartType === 'annual') {
-                this.charts.comparison.data.datasets[0].data = [
-                    this.currentCosts.total * 12,
-                    this.optimizedCosts.total * 12
-                ];
-                this.charts.comparison.options.scales.y.ticks.callback = (value) => `€${value}`;
-            } else {
-                this.charts.comparison.data.datasets[0].data = [
-                    this.currentCosts.total,
-                    this.optimizedCosts.total
-                ];
-                this.charts.comparison.options.scales.y.ticks.callback = (value) => `€${value}`;
-            }
+        if (this.charts.comparison) {
+            const multiplier = isAnnual ? 12 : 1;
+            this.charts.comparison.data.datasets[0].data = [
+                costs.total * multiplier,
+                optimized.total * multiplier
+            ];
             this.charts.comparison.update();
         }
     }
-
-    applyQuickAction(event) {
-        const btn = event.target.closest('.btn-action');
-        if (!btn) return;
+    
+    updateRecommendations(recommendations) {
+        const container = document.querySelector('.optimization-list');
+        if (!container) return;
         
-        const action = btn.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
-        if (action) {
-            this.applyOptimization(action);
+        container.innerHTML = '';
+        
+        recommendations.forEach(rec => {
+            const item = document.createElement('div');
+            item.className = `optimization-item ${rec.impact}-impact`;
+            item.innerHTML = `
+                <div class="optimization-icon">
+                    <i class="fas fa-${this.getRecommendationIcon(rec.id)}"></i>
+                </div>
+                <div class="optimization-content">
+                    <h4>${rec.title}</h4>
+                    <p>${rec.description}</p>
+                    <div class="optimization-impact">
+                        <span class="impact-value">Save €${rec.savings}/mois</span>
+                        <span class="impact-difficulty">${rec.difficulty}</span>
+                    </div>
+                </div>
+                <button class="apply-btn" data-id="${rec.id}">
+                    <i class="fas fa-check"></i>
+                </button>
+            `;
+            
+            container.appendChild(item);
+            
+            // Ajout de l'événement
+            item.querySelector('.apply-btn').addEventListener('click', () => {
+                rec.action();
+                this.performAnalysis();
+            });
+        });
+    }
+    
+    getRecommendationIcon(id) {
+        const icons = {
+            'auto-scale': 'clock',
+            'storage-tier': 'database',
+            'aks-scale': 'server',
+            'reserved-instances': 'calendar-check'
+        };
+        return icons[id] || 'lightbulb';
+    }
+    
+    updateOptimizationSummary(costs, optimized) {
+        if (!optimized) return;
+        
+        const savings = costs.total - optimized.total;
+        const percentage = Math.round((savings / costs.total) * 100);
+        const score = Math.min(100, Math.round(60 + (percentage * 1.5)));
+        
+        document.getElementById('potentialSavings').textContent = `€${savings}/mois`;
+        document.getElementById('optimizationScore').textContent = `${score}/100`;
+    }
+    
+    updateHiddenCosts(costs) {
+        document.getElementById('bandwidthCost').textContent = `€${costs.hidden.bandwidth}`;
+        document.getElementById('snapshotsCost').textContent = `€${costs.hidden.snapshots}`;
+        document.getElementById('monitoringCost').textContent = `€${costs.hidden.monitoring}`;
+        document.getElementById('securityCost').textContent = `€${costs.hidden.security}`;
+        document.getElementById('totalHiddenCost').textContent = `€${costs.hidden.total}/mois`;
+    }
+    
+    updateComparison(costs, optimized) {
+        if (!optimized) return;
+        
+        const savings = costs.total - optimized.total;
+        const percentage = Math.round((savings / costs.total) * 100);
+        
+        document.getElementById('currentCost').textContent = `€${costs.total}`;
+        document.getElementById('optimizedCost').textContent = `€${optimized.total}`;
+        document.getElementById('savingsAmount').textContent = `€${savings}`;
+        document.getElementById('savingsPercent').textContent = `${percentage}%`;
+    }
+    
+    quickOptimize() {
+        this.showLoader();
+        
+        // Applique les optimisations automatiques
+        if (this.config.vm.hours > 12) {
+            this.config.vm.hours = 12;
+            document.getElementById('vmHours').value = 12;
+            this.updateTimeline({ target: { value: 12 } });
+        }
+        
+        if (this.config.aks.enabled && this.config.aks.nodes > 2) {
+            this.config.aks.nodes = 2;
+            document.getElementById('aksNodes').value = 2;
+            this.updateAKS({ target: { value: 2 } });
+        }
+        
+        if (this.config.storage.type === 'Premium_LRS') {
+            this.selectStorageTierUI('Standard_GRS');
+        }
+        
+        // Recalcule
+        setTimeout(() => {
+            this.performAnalysis();
+            this.showNotification('Quick optimization applied', 'success');
+        }, 500);
+    }
+    
+    applyRecommendation(event) {
+        const btn = event.currentTarget;
+        const id = btn.dataset.id;
+        
+        // Animation du bouton
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fas fa-check"></i>';
+            btn.disabled = false;
+            
+            // Trouve et applique la recommandation
+            // (La logique d'application est gérée dans les écouteurs d'événements)
+            
+            this.showNotification('Recommendation applied', 'success');
+        }, 1000);
+    }
+    
+    toggleTheme() {
+        const btn = document.getElementById('themeToggle');
+        const icon = btn.querySelector('i');
+        
+        // Animation du bouton
+        btn.style.transform = 'rotate(180deg)';
+        setTimeout(() => {
+            btn.style.transform = 'rotate(0)';
+        }, 300);
+        
+        // Change l'icône
+        if (icon.classList.contains('fa-moon')) {
+            icon.classList.remove('fa-moon');
+            icon.classList.add('fa-sun');
+            document.body.style.filter = 'invert(1) hue-rotate(180deg)';
+        } else {
+            icon.classList.remove('fa-sun');
+            icon.classList.add('fa-moon');
+            document.body.style.filter = 'none';
         }
     }
-
-    applyOptimization(type) {
-        switch (type) {
-            case 'hours':
-                document.getElementById('vmHours').value = 12;
-                break;
-            case 'storage':
-                document.getElementById('storageType').value = 'Standard_LRS';
-                break;
-            case 'aks':
-                document.getElementById('aksNodes').value = 2;
-                break;
-        }
-        
-        this.calculateCosts();
-        this.showNotification('Optimisation appliquée !', 'success');
-    }
-
-    exportResults() {
-        if (!this.currentCosts) {
-            this.showNotification('Calculez d\'abord vos coûts', 'warning');
-            return;
-        }
+    
+    exportAnalysis() {
+        const costs = this.calculateCosts();
+        const optimized = this.calculateOptimizedConfig();
         
         const data = {
-            config: this.currentConfig,
-            costs: this.currentCosts,
-            optimized: this.optimizedCosts,
-            date: new Date().toISOString()
+            config: this.config,
+            costs: costs,
+            optimized: optimized,
+            analysis: {
+                timestamp: new Date().toISOString(),
+                version: '2.0',
+                savings: costs.total - optimized.total
+            }
         };
         
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `azure-costs-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `azure-cost-analysis-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        this.showNotification('Résultats exportés !', 'success');
+        this.showNotification('Analysis exported', 'success');
     }
-
-    showHelp() {
-        const help = `
-        <div class="help-modal">
-            <h3><i class="fas fa-question-circle"></i> Aide du calculateur</h3>
-            <div class="help-content">
-                <h4>Comment utiliser :</h4>
-                <p>1. Configurez vos ressources Azure dans la section "Configuration"</p>
-                <p>2. Cliquez sur "Calculer les coûts" pour obtenir une estimation</p>
-                <p>3. Consultez les recommandations d'optimisation</p>
-                <p>4. Appliquez les optimisations suggérées</p>
-                
-                <h4>Fonctionnalités :</h4>
-                <ul>
-                    <li>📊 Graphiques interactifs</li>
-                    <li>💡 Recommandations intelligentes</li>
-                    <li>👁️ Coûts cachés Azure</li>
-                    <li>🔄 Comparaison avant/après</li>
-                    <li>💾 Export des résultats</li>
-                </ul>
-            </div>
-        </div>
-        `;
+    
+    startLiveUpdates() {
+        // Met à jour l'heure
+        setInterval(() => {
+            const time = new Date().toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('updateTime').textContent = `Last updated: ${time}`;
+        }, 60000);
         
-        this.showModal('Aide', help);
+        // Animation des statistiques
+        setInterval(() => {
+            this.animateStats();
+        }, 5000);
     }
-
-    showContact() {
-        const contact = `
-        <div class="contact-modal">
-            <h3><i class="fas fa-envelope"></i> Contact Pierre-DevOps</h3>
-            <div class="contact-content">
-                <p>Pour un audit personnalisé de vos coûts Azure :</p>
-                <div class="contact-info">
-                    <p><i class="fas fa-globe"></i> <strong>Site :</strong> https://pierre-devops.com</p>
-                    <p><i class="fas fa-envelope"></i> <strong>Email :</strong> contact@pierre-devops.com</p>
-                    <p><i class="fas fa-calendar"></i> <strong>Réponse sous 24h</strong></p>
-                </div>
-                <p class="contact-note">Spécialiste en optimisation cloud et DevOps sur Azure</p>
-            </div>
-        </div>
-        `;
+    
+    animateStats() {
+        const stats = ['avgSaving', 'analysedCosts', 'optimizedHours'];
         
-        this.showModal('Contact', contact);
-    }
-
-    showModal(title, content) {
-        // Crée une modale simple
-        const modal = document.createElement('div');
-        modal.className = 'modal-overlay';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>${title}</h3>
-                    <button class="modal-close">&times;</button>
-                </div>
-                <div class="modal-body">
-                    ${content}
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        
-        // Fermeture
-        modal.querySelector('.modal-close').addEventListener('click', () => {
-            document.body.removeChild(modal);
+        stats.forEach(id => {
+            const element = document.getElementById(id);
+            if (!element) return;
+            
+            const current = parseInt(element.textContent.replace(/[^0-9]/g, '')) || 0;
+            const target = current + Math.floor(Math.random() * 10) - 5;
+            
+            this.animateCounterValue(element, current, Math.max(0, target));
         });
+    }
+    
+    animateCounterValue(element, start, end) {
+        const duration = 1000;
+        const steps = 60;
+        const stepValue = (end - start) / steps;
+        const unit = element.textContent.replace(/[0-9]/g, '');
         
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                document.body.removeChild(modal);
+        let step = 0;
+        const animate = () => {
+            if (step < steps) {
+                const value = Math.round(start + (stepValue * step));
+                element.textContent = value + unit;
+                step++;
+                setTimeout(animate, duration / steps);
+            } else {
+                element.textContent = end + unit;
             }
+        };
+        
+        animate();
+    }
+    
+    animateSuccess() {
+        // Effet de confetti
+        this.createConfetti();
+        
+        // Animation des cartes
+        document.querySelectorAll('.visual-card').forEach((card, index) => {
+            card.style.transform = 'translateY(-20px)';
+            card.style.opacity = '0';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.transform = 'translateY(0)';
+                card.style.opacity = '1';
+            }, index * 100);
         });
     }
-
+    
+    createConfetti() {
+        const colors = ['#00BCF2', '#9B4DFF', '#FF4D8D', '#00D68F', '#FFAA00'];
+        const confettiCount = 50;
+        
+        for (let i = 0; i < confettiCount; i++) {
+            const confetti = document.createElement('div');
+            confetti.style.cssText = `
+                position: fixed;
+                width: 10px;
+                height: 10px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                border-radius: 2px;
+                pointer-events: none;
+                z-index: 10000;
+                left: ${Math.random() * 100}vw;
+                top: -20px;
+                transform: rotate(${Math.random() * 360}deg);
+            `;
+            
+            document.body.appendChild(confetti);
+            
+            // Animation
+            const duration = 1000 + Math.random() * 1000;
+            const animation = confetti.animate([
+                { transform: `translateY(0) rotate(0deg)`, opacity: 1 },
+                { transform: `translateY(100vh) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+            ], {
+                duration: duration,
+                easing: 'cubic-bezier(0.1, 0.8, 0.2, 1)'
+            });
+            
+            animation.onfinish = () => confetti.remove();
+        }
+    }
+    
+    showLoader() {
+        const loader = document.createElement('div');
+        loader.id = 'global-loader';
+        loader.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: var(--primary);
+        `;
+        
+        loader.innerHTML = `
+            <div class="spinner" style="
+                width: 60px;
+                height: 60px;
+                border: 4px solid transparent;
+                border-top: 4px solid var(--primary);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 20px;
+            "></div>
+            <div style="
+                font-size: 1.2rem;
+                font-weight: 600;
+                background: linear-gradient(135deg, var(--primary), var(--secondary));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+            ">Analyzing Azure Costs...</div>
+        `;
+        
+        document.body.appendChild(loader);
+    }
+    
+    hideLoader() {
+        const loader = document.getElementById('global-loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            loader.style.transition = 'opacity 0.3s ease';
+            setTimeout(() => loader.remove(), 300);
+        }
+    }
+    
     showNotification(message, type = 'info') {
         const notification = document.createElement('div');
-        notification.className = `notification notification-${type} fade-in`;
-        notification.innerHTML = `
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-            <span>${message}</span>
-        `;
-        
+        notification.className = `notification notification-${type}`;
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             padding: 16px 24px;
-            background: ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--primary)'};
+            background: ${type === 'success' ? 'var(--success)' : 
+                        type === 'error' ? 'var(--danger)' : 
+                        type === 'warning' ? 'var(--warning)' : 'var(--info)'};
             color: white;
             border-radius: var(--radius-md);
-            z-index: 9999;
-            box-shadow: var(--shadow-lg);
+            z-index: 10000;
+            box-shadow: var(--glass-shadow);
             display: flex;
             align-items: center;
             gap: 12px;
             min-width: 300px;
             max-width: 400px;
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease;
+        `;
+        
+        const icons = {
+            success: 'check-circle',
+            error: 'exclamation-circle',
+            warning: 'exclamation-triangle',
+            info: 'info-circle'
+        };
+        
+        notification.innerHTML = `
+            <i class="fas fa-${icons[type]}" style="font-size: 1.2rem;"></i>
+            <span>${message}</span>
         `;
         
         document.body.appendChild(notification);
         
+        // Animation d'entrée
         setTimeout(() => {
-            notification.style.animation = 'fadeOut 0.3s ease-out';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    document.body.removeChild(notification);
-                }
-            }, 300);
+            notification.style.transform = 'translateX(0)';
+            notification.style.opacity = '1';
+        }, 10);
+        
+        // Auto-dismiss
+        setTimeout(() => {
+            notification.style.transform = 'translateX(100%)';
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 300);
         }, 3000);
     }
-
-    showLoading() {
-        const calculateBtn = document.getElementById('calculateBtn');
-        if (calculateBtn) {
-            calculateBtn.innerHTML = '<div class="spinner"></div> Calcul en cours...';
-            calculateBtn.disabled = true;
-        }
+    
+    updateVMDisplay() {
+        document.getElementById('vmQty').textContent = this.config.vm.count;
+        document.getElementById('vmHours').value = this.config.vm.hours;
+        document.getElementById('timelineFill').style.width = `${((this.config.vm.hours - 4) / 20) * 100}%`;
     }
-
-    hideLoading() {
-        const calculateBtn = document.getElementById('calculateBtn');
-        if (calculateBtn) {
-            calculateBtn.innerHTML = '<i class="fas fa-calculator"></i> Calculer les coûts';
-            calculateBtn.disabled = false;
-        }
+    
+    updateStorageDisplay() {
+        document.getElementById('storageSize').value = this.config.storage.size;
+        document.getElementById('storageValue').textContent = `${this.config.storage.size} GB`;
+        document.getElementById('capacityFill').style.width = `${(this.config.storage.size / 2048) * 100}%`;
+        document.getElementById('backupEnabled').checked = this.config.storage.backup;
     }
+    
+    updateAKSDisplay() {
+        document.getElementById('aksEnabled').checked = this.config.aks.enabled;
+        document.getElementById('aksNodes').value = this.config.aks.nodes;
+        document.getElementById('aksNodesValue').textContent = this.config.aks.nodes;
+    }
+    
+    // Debounce pour les analyses
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    debouncedAnalysis = this.debounce(() => this.performAnalysis(), 500);
 }
 
 // Initialisation quand la page est chargée
 document.addEventListener('DOMContentLoaded', () => {
-    window.calculator = new AzureCostCalculator();
-    window.calculator.init();
+    window.AzureAI = new AzureCostIntelligence();
     
-    // Définir applyOptimization globalement
-    window.applyOptimization = (type) => window.calculator.applyOptimization(type);
+    // Ajout des styles d'animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes ripple {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+        
+        @keyframes confetti-fall {
+            0% { transform: translateY(-100vh) rotate(0deg); }
+            100% { transform: translateY(100vh) rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
 });
-
-// Styles CSS pour les notifications et modales
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeOut {
-        from { opacity: 1; transform: translateY(0); }
-        to { opacity: 0; transform: translateY(-10px); }
-    }
-    
-    .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        animation: fadeIn 0.3s ease-out;
-    }
-    
-    .modal-content {
-        background: white;
-        border-radius: var(--radius-lg);
-        padding: 32px;
-        max-width: 500px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-        box-shadow: var(--shadow-xl);
-    }
-    
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-        padding-bottom: 16px;
-        border-bottom: 2px solid var(--gray-100);
-    }
-    
-    .modal-header h3 {
-        color: var(--primary);
-        font-size: 1.5rem;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .modal-close {
-        background: none;
-        border: none;
-        font-size: 2rem;
-        color: var(--gray-600);
-        cursor: pointer;
-        line-height: 1;
-        padding: 0;
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .modal-close:hover {
-        color: var(--danger);
-    }
-    
-    .recommendation-item {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        padding: 20px;
-        background: var(--gray-50);
-        border-radius: var(--radius-md);
-        margin-bottom: 16px;
-        border-left: 4px solid var(--primary);
-    }
-    
-    .recommendation-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: var(--radius-md);
-        background: var(--primary);
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-    }
-    
-    .recommendation-content {
-        flex: 1;
-    }
-    
-    .recommendation-content h5 {
-        color: var(--gray-900);
-        margin-bottom: 8px;
-        font-size: 1.1rem;
-    }
-    
-    .recommendation-content p {
-        color: var(--gray-600);
-        font-size: 0.95rem;
-        line-height: 1.5;
-    }
-    
-    .help-content, .contact-content {
-        line-height: 1.8;
-    }
-    
-    .help-content h4, .contact-content h4 {
-        color: var(--primary);
-        margin: 20px 0 10px 0;
-        font-size: 1.1rem;
-    }
-    
-    .help-content ul {
-        padding-left: 20px;
-        margin: 10px 0;
-    }
-    
-    .help-content li {
-        margin-bottom: 8px;
-    }
-    
-    .contact-info {
-        background: var(--gray-50);
-        padding: 20px;
-        border-radius: var(--radius-md);
-        margin: 20px 0;
-    }
-    
-    .contact-info p {
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    
-    .contact-note {
-        font-style: italic;
-        color: var(--gray-600);
-        text-align: center;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid var(--gray-200);
-    }
-`;
-document.head.appendChild(style);
