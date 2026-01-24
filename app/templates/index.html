@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculateur de Coûts Azure - Version Avancée</title>
+    <title>Calculateur de Coûts Azure Intelligent</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -11,230 +11,222 @@
 <body>
     <div class="container">
         <header>
-            <h1><i class="fas fa-calculator"></i> Calculateur Avancé de Coûts Azure</h1>
-            <p class="subtitle">Analyse complète avec visualisations et recommandations d'optimisation</p>
+            <h1><i class="fas fa-calculator"></i> Calculateur de Coûts Azure Intelligent</h1>
+            <p class="subtitle">Découvrez vos coûts cachés et les économies possibles</p>
         </header>
 
-        <div class="dashboard">
-            <!-- Section de saisie -->
-            <div class="input-section card">
-                <h2><i class="fas fa-edit"></i> Configuration des Ressources</h2>
-                <div class="form-grid">
+        <div class="main-layout">
+            <!-- Colonne gauche : Formulaire -->
+            <div class="form-column">
+                <div class="card">
+                    <h2><i class="fas fa-server"></i> Machines Virtuelles</h2>
                     <div class="form-group">
-                        <label for="vmCount"><i class="fas fa-server"></i> Nombre de Machines Virtuelles:</label>
-                        <input type="number" id="vmCount" min="1" max="1000" value="4">
-                        <div class="tooltip">
-                            <i class="fas fa-info-circle"></i>
-                            <span class="tooltiptext">Inclut les coûts de licence Windows si applicable</span>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="vmType"><i class="fas fa-microchip"></i> Type de VM:</label>
-                        <select id="vmType">
-                            <option value="B2s">B2s (2 vCPU, 4 GB RAM) - Développement/Test</option>
-                            <option value="D2s_v3" selected>D2s v3 (2 vCPU, 8 GB RAM) - Usage Général</option>
-                            <option value="D4s_v3">D4s v3 (4 vCPU, 16 GB RAM) - Production Moyenne</option>
-                            <option value="E4s_v3">E4s v3 (4 vCPU, 32 GB RAM) - Mémoire Optimisée</option>
-                            <option value="F4s_v2">F4s v2 (4 vCPU, 8 GB RAM) - Compute Optimisé</option>
+                        <label for="vmSize">Taille VM</label>
+                        <select id="vmSize" class="form-control">
+                            <option value="B2s">B2s (2 vCPU, 4GB RAM) - Dev/Test</option>
+                            <option value="D2s_v3">D2s v3 (2 vCPU, 8GB RAM) - Usage général</option>
+                            <option value="D4s_v3">D4s v3 (4 vCPU, 16GB RAM)</option>
+                            <option value="E4s_v3">E4s v3 (4 vCPU, 32GB RAM) - Mémoire</option>
+                            <option value="F4s_v2">F4s v2 (4 vCPU, 8GB RAM) - Compute</option>
                         </select>
                     </div>
                     
                     <div class="form-group">
-                        <label for="storageSize"><i class="fas fa-hdd"></i> Stockage Managed Disks (GB):</label>
-                        <input type="number" id="storageSize" min="32" max="32768" value="512">
-                        <select id="storageTier">
-                            <option value="hdd">Standard HDD</option>
-                            <option value="ssd" selected>Standard SSD</option>
-                            <option value="premium">Premium SSD</option>
-                            <option value="ultra">Ultra Disk</option>
-                        </select>
+                        <label for="vmQuantity">Quantité</label>
+                        <input type="number" id="vmQuantity" class="form-control" value="1" min="1" max="100">
+                        <div class="form-note">Coût estimé: <span id="vmCostPreview">€0.00/mois</span></div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="databaseTier"><i class="fas fa-database"></i> Base de données:</label>
-                        <select id="databaseTier">
-                            <option value="none">Aucune</option>
-                            <option value="basic">Azure SQL DB - Basic (5 DTU)</option>
-                            <option value="standard" selected>Azure SQL DB - Standard (10 DTU)</option>
-                            <option value="premium">Azure SQL DB - Premium (25 DTU)</option>
-                            <option value="cosmos">Cosmos DB (400 RU/s)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="bandwidth"><i class="fas fa-network-wired"></i> Bande passante sortante (GB/mois):</label>
-                        <input type="number" id="bandwidth" min="0" max="10000" value="100">
-                        <div class="tooltip">
-                            <i class="fas fa-info-circle"></i>
-                            <span class="tooltiptext">Les 5 premiers GB sont gratuits, puis tarification progressive</span>
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="backup"><i class="fas fa-save"></i> Sauvegarde Azure:</label>
-                        <select id="backup">
-                            <option value="none">Non configuré</option>
-                            <option value="basic" selected>Instances protégées: 5</option>
-                            <option value="advanced">Instances protégées: 10 + Sauvegarde à long terme</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="hours"><i class="fas fa-clock"></i> Heures/mois:</label>
-                        <input type="number" id="hours" min="1" max="744" value="720">
-                        <div class="slider-container">
-                            <input type="range" id="hoursSlider" min="168" max="744" value="720" step="24">
-                            <div class="slider-labels">
-                                <span>Temps partiel (168h)</span>
-                                <span>Temps plein (720h)</span>
+                        <label for="vmHours">Heures/jour</label>
+                        <div class="range-slider">
+                            <input type="range" id="vmHoursSlider" min="1" max="24" value="24" class="slider">
+                            <div class="slider-value">
+                                <span id="vmHoursValue">24</span> heures/jour
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="button-group">
-                    <button id="calculateBtn" class="btn-primary">
-                        <i class="fas fa-calculator"></i> Calculer les Coûts
-                    </button>
-                    <button id="optimizeBtn" class="btn-secondary">
-                        <i class="fas fa-magic"></i> Optimiser Automatiquement
-                    </button>
-                    <button id="resetBtn" class="btn-outline">
-                        <i class="fas fa-redo"></i> Réinitialiser
-                    </button>
+
+                <div class="card">
+                    <h2><i class="fas fa-cube"></i> Azure Kubernetes Service</h2>
+                    <div class="form-group">
+                        <label for="aksSize">Taille Nodes</label>
+                        <select id="aksSize" class="form-control">
+                            <option value="B2s">B2s (2 vCPU, 4GB RAM)</option>
+                            <option value="D2s_v3">D2s v3 (2 vCPU, 8GB RAM)</option>
+                            <option value="D4s_v3">D4s v3 (4 vCPU, 16GB RAM)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="aksNodes">Nombre de nodes</label>
+                        <input type="number" id="aksNodes" class="form-control" value="2" min="1" max="50">
+                        <div class="form-note">Coût estimé: <span id="aksCostPreview">€0.00/mois</span></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="aksHours">Heures/jour</label>
+                        <div class="range-slider">
+                            <input type="range" id="aksHoursSlider" min="1" max="24" value="24" class="slider">
+                            <div class="slider-value">
+                                <span id="aksHoursValue">24</span> heures/jour
+                            </div>
+                        </div>
+                    </div>
                 </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-hdd"></i> Stockage Azure</h2>
+                    <div class="form-group">
+                        <label for="storageType">Type de stockage</label>
+                        <select id="storageType" class="form-control">
+                            <option value="standard_lrs">Standard LRS</option>
+                            <option value="standard_grs">Standard GRS</option>
+                            <option value="premium_lrs">Premium LRS</option>
+                            <option value="premium_zrs">Premium ZRS</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="storageCapacity">Capacité (GB)</label>
+                        <div class="range-slider">
+                            <input type="range" id="storageSlider" min="1" max="1000" value="100" class="slider">
+                            <div class="slider-value">
+                                <span id="storageValue">100</span> GB
+                            </div>
+                        </div>
+                        <div class="form-note">Coût estimé: <span id="storageCostPreview">€0.00/mois</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-database"></i> SQL Database</h2>
+                    <div class="form-group">
+                        <label for="sqlTier">Tier</label>
+                        <select id="sqlTier" class="form-control">
+                            <option value="basic">Basic</option>
+                            <option value="standard_s0">Standard S0</option>
+                            <option value="standard_s1">Standard S1</option>
+                            <option value="standard_s2">Standard S2</option>
+                            <option value="premium_p1">Premium P1</option>
+                            <option value="premium_p2">Premium P2</option>
+                        </select>
+                        <div class="form-note">Coût estimé: <span id="sqlCostPreview">€0.00/mois</span></div>
+                    </div>
+                </div>
+
+                <button id="calculateAllBtn" class="btn-calculate">
+                    <i class="fas fa-calculator"></i> Calculer tous les coûts
+                </button>
             </div>
 
-            <!-- Panneau de résultats -->
-            <div class="results-section">
+            <!-- Colonne droite : Résultats et visualisations -->
+            <div class="results-column">
+                <div class="summary-card">
+                    <div class="summary-header">
+                        <h3><i class="fas fa-chart-pie"></i> Synthèse des Coûts</h3>
+                        <div class="total-cost" id="totalCost">€0.00/mois</div>
+                    </div>
+                    
+                    <div class="cost-breakdown">
+                        <div class="cost-item">
+                            <span>Machines Virtuelles</span>
+                            <span id="vmCostDetail">€0.00</span>
+                        </div>
+                        <div class="cost-item">
+                            <span>Kubernetes Service</span>
+                            <span id="aksCostDetail">€0.00</span>
+                        </div>
+                        <div class="cost-item">
+                            <span>Stockage</span>
+                            <span id="storageCostDetail">€0.00</span>
+                        </div>
+                        <div class="cost-item">
+                            <span>SQL Database</span>
+                            <span id="sqlCostDetail">€0.00</span>
+                        </div>
+                        <div class="cost-item hidden-cost">
+                            <span><i class="fas fa-eye-slash"></i> Coûts Cachés</span>
+                            <span id="hiddenCostDetail">€0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Graphiques -->
                 <div class="card">
-                    <h2><i class="fas fa-chart-line"></i> Vue d'ensemble des Coûts</h2>
-                    
-                    <div class="cost-summary">
-                        <div class="cost-card total">
-                            <h3>Coût Total Mensuel</h3>
-                            <div class="cost-amount" id="totalCost">€0.00</div>
-                            <div class="cost-breakdown">
-                                <span id="vmCost">VM: €0.00</span>
-                                <span id="storageCost">Stockage: €0.00</span>
-                                <span id="dbCost">Base de données: €0.00</span>
-                            </div>
-                        </div>
-                        
-                        <div class="cost-card savings">
-                            <h3>Économies Potentielles</h3>
-                            <div class="cost-amount" id="savings">€0.00</div>
-                            <div class="savings-percent" id="savingsPercent">0%</div>
-                        </div>
-                        
-                        <div class="cost-card hidden">
-                            <h3>Coûts Cachés</h3>
-                            <div class="cost-amount" id="hiddenCost">€0.00</div>
-                            <div class="cost-detail">Bandwidth, Snapshots, Monitoring</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Graphiques -->
-                    <div class="charts-container">
-                        <div class="chart-wrapper">
-                            <h3><i class="fas fa-chart-pie"></i> Répartition des Coûts</h3>
-                            <canvas id="costDistributionChart"></canvas>
-                        </div>
-                        
-                        <div class="chart-wrapper">
-                            <h3><i class="fas fa-chart-bar"></i> Comparaison Avant/Après Optimisation</h3>
-                            <canvas id="comparisonChart"></canvas>
-                        </div>
+                    <h3><i class="fas fa-chart-bar"></i> Répartition des Coûts</h3>
+                    <div class="chart-container">
+                        <canvas id="costChart"></canvas>
                     </div>
                 </div>
-                
-                <!-- Section d'optimisation -->
-                <div class="card optimization-section">
-                    <h2><i class="fas fa-lightbulb"></i> Recommandations d'Optimisation</h2>
-                    <div id="recommendations" class="recommendations-list">
-                        <div class="recommendation-item">
-                            <i class="fas fa-check-circle success"></i>
-                            <span class="recommendation-text">Cliquez sur "Calculer les Coûts" pour voir les recommandations personnalisées</span>
+
+                <!-- Recommandations -->
+                <div class="card recommendations">
+                    <h3><i class="fas fa-lightbulb"></i> Recommandations d'Optimisation</h3>
+                    <div id="recommendationsList">
+                        <div class="recommendation">
+                            <i class="fas fa-info-circle"></i>
+                            <p>Cliquez sur "Calculer" pour voir vos recommandations personnalisées</p>
                         </div>
                     </div>
                     
-                    <div class="optimization-actions">
-                        <h3><i class="fas fa-sliders-h"></i> Ajustements Recommandés</h3>
-                        <div class="optimization-grid">
-                            <div class="optimization-item">
-                                <label>Taille VM Recommandée:</label>
-                                <select id="optimizedVmType" class="optimization-select">
-                                    <option value="D2s_v3">D2s v3</option>
-                                </select>
-                                <button class="btn-apply" data-target="vmType">Appliquer</button>
-                            </div>
-                            <div class="optimization-item">
-                                <label>Stockage Recommandé:</label>
-                                <select id="optimizedStorage" class="optimization-select">
-                                    <option value="ssd">Standard SSD</option>
-                                </select>
-                                <button class="btn-apply" data-target="storageTier">Appliquer</button>
-                            </div>
-                            <div class="optimization-item">
-                                <label>Heures/mois Optimisées:</label>
-                                <input type="number" id="optimizedHours" value="720" class="optimization-input">
-                                <button class="btn-apply" data-target="hours">Appliquer</button>
+                    <div class="savings-preview">
+                        <div class="savings-badge">
+                            <i class="fas fa-piggy-bank"></i>
+                            <div>
+                                <span class="savings-label">Économies potentielles</span>
+                                <span class="savings-amount" id="potentialSavings">€0.00/mois</span>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Coûts cachés détaillés -->
-                <div class="card hidden-costs-section">
-                    <h2><i class="fas fa-eye-slash"></i> Coûts Cachés Azure</h2>
-                    <div class="hidden-costs-grid">
-                        <div class="hidden-cost-item">
-                            <i class="fas fa-exchange-alt"></i>
-                            <div>
-                                <h4>Transfert de données sortantes</h4>
-                                <p id="hiddenBandwidth">€0.00/mois au-delà des 5GB gratuits</p>
-                            </div>
+
+                <!-- Comparaison avant/après -->
+                <div class="card comparison">
+                    <h3><i class="fas fa-exchange-alt"></i> Comparaison Avant/Après Optimisation</h3>
+                    <div class="comparison-grid">
+                        <div class="comparison-item before">
+                            <h4>Configuration Actuelle</h4>
+                            <div class="comparison-cost" id="currentConfigCost">€0.00/mois</div>
+                            <ul class="comparison-details">
+                                <li id="currentVM">VM: B2s x1</li>
+                                <li id="currentStorage">Stockage: 100GB</li>
+                            </ul>
                         </div>
-                        <div class="hidden-cost-item">
-                            <i class="fas fa-camera"></i>
-                            <div>
-                                <h4>Snapshots de disques</h4>
-                                <p id="hiddenSnapshots">€0.00/mois (0.05€/GB/mois)</p>
-                            </div>
-                        </div>
-                        <div class="hidden-cost-item">
-                            <i class="fas fa-chart-bar"></i>
-                            <div>
-                                <h4>Surveillance et Logs</h4>
-                                <p id="hiddenMonitoring">€0.00/mois (Log Analytics + Alertes)</p>
-                            </div>
-                        </div>
-                        <div class="hidden-cost-item">
-                            <i class="fas fa-key"></i>
-                            <div>
-                                <h4>Key Vault & Certificats</h4>
-                                <p id="hiddenSecurity">€0.00/mois</p>
-                            </div>
+                        <div class="comparison-item after">
+                            <h4>Configuration Optimisée</h4>
+                            <div class="comparison-cost" id="optimizedConfigCost">€0.00/mois</div>
+                            <ul class="comparison-details">
+                                <li id="optimizedVM">Recommandé: D2s v3</li>
+                                <li id="optimizedStorage">Optimisé: 80GB</li>
+                            </ul>
+                            <button id="applyOptimizationBtn" class="btn-optimize">
+                                <i class="fas fa-magic"></i> Appliquer
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        
+
         <footer>
-            <p>Calculateur Azure v2.0 | Dernière mise à jour: <span id="currentDate"></span> | 
-                <a href="https://azure.microsoft.com/fr-fr/pricing/calculator/" target="_blank">
-                    <i class="fas fa-external-link-alt"></i> Référence Prix Azure
-                </a>
-            </p>
+            <div class="footer-content">
+                <div class="footer-info">
+                    <h4>Besoin d'aide pour optimiser vos coûts Azure ?</h4>
+                    <p>Contactez Pierre-DevOps Solutions pour un audit personnalisé</p>
+                </div>
+                <div class="footer-note">
+                    <p><i class="fas fa-info-circle"></i> Prix indicatifs région West Europe - Tarifs Microsoft susceptibles de changer</p>
+                    <p class="footer-update">Dernière mise à jour: <span id="updateDate"></span></p>
+                </div>
+            </div>
         </footer>
     </div>
 
     <script src="{{ url_for('static', filename='js/calculator.js') }}"></script>
     <script>
-        // Date actuelle dans le footer
-        document.getElementById('currentDate').textContent = new Date().toLocaleDateString('fr-FR');
+        document.getElementById('updateDate').textContent = new Date().toLocaleDateString('fr-FR');
     </script>
 </body>
 </html>
